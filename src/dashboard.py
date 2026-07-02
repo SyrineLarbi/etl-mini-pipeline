@@ -9,6 +9,7 @@ renders the latest per-city snapshot plus any accumulated history.
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import altair as alt
@@ -18,6 +19,23 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "db" / "warehouse.duckdb"
+
+# make the `src` package importable when run via `streamlit run src/dashboard.py`
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.extract import extract          # noqa: E402
+from src.transform import transform_all  # noqa: E402
+from src.load import load_gold           # noqa: E402
+
+
+def build_warehouse() -> None:
+    """Run the pipeline end-to-end to (re)populate the warehouse with live data."""
+    raw = extract(ROOT / "data" / "raw")
+    gold = transform_all(
+        raw, ROOT / "data" / "bronze", ROOT / "data" / "silver", ROOT / "data" / "gold"
+    )
+    load_gold(gold)
 
 # ── temperature palette (cool → warm → hot), matches the ETL theme ──────
 TEMP_SCALE = alt.Scale(
@@ -44,18 +62,31 @@ def load_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
     return summary, history
 
 
-# ── guard: warehouse must exist ─────────────────────────────────────────
+# ── bootstrap: build the warehouse on first load (e.g. fresh clone / cloud) ──
 if not DB_PATH.exists():
-    st.error("No warehouse yet. Run `python -m src.pipeline run` first.")
-    st.stop()
+    with st.spinner("First run — fetching live weather and building the warehouse…"):
+        try:
+            build_warehouse()
+        except Exception as exc:  # noqa: BLE001
+            st.error(f"Could not build the warehouse: {exc}")
+            st.stop()
+    load_tables.clear()
 
 summary, history = load_tables()
 
-st.title("🌡️ Weather ETL — Gold Layer")
-st.caption(
-    "Analytics-ready output of `gold.weather_summary`, aggregated over a 7-day "
-    "window per city. Source: Open-Meteo → bronze → silver → gold → DuckDB."
-)
+head_l, head_r = st.columns([4, 1])
+with head_l:
+    st.title("🌡️ Weather ETL — Gold Layer")
+    st.caption(
+        "Analytics-ready output of `gold.weather_summary`, aggregated over a 7-day "
+        "window per city. Source: Open-Meteo → bronze → silver → gold → DuckDB."
+    )
+with head_r:
+    if st.button("↻ Refresh data", help="Run the pipeline now against live Open-Meteo data"):
+        with st.spinner("Fetching latest weather…"):
+            build_warehouse()
+        load_tables.clear()
+        st.rerun()
 
 if summary.empty:
     st.warning("The gold table is empty. Run the pipeline to populate it.")
@@ -101,7 +132,7 @@ if metric == "Temperature":
     avg_tick = base.mark_tick(thickness=2, size=18, color="#e7ecf3").encode(
         x="temp_avg:Q"
     )
-    st.altair_chart((rng + avg_tick).properties(height=280), use_container_width=True)
+    st.altair_chart((rng + avg_tick).properties(height=280), width="stretch")
 else:
     chart = (
         alt.Chart(summary)
@@ -117,14 +148,14 @@ else:
         )
         .properties(height=280)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
 # ── raw snapshot ────────────────────────────────────────────────────────
 st.subheader("Station readouts")
 st.dataframe(
     summary,
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
     column_config={
         "temp_avg": st.column_config.NumberColumn("avg °C", format="%.1f"),
         "temp_min": st.column_config.NumberColumn("min °C", format="%.1f"),
@@ -149,7 +180,7 @@ if n_loads > 1:
         )
         .properties(height=300)
     )
-    st.altair_chart(line, use_container_width=True)
+    st.altair_chart(line, width="stretch")
 else:
     st.info(
         "Run the pipeline again to accumulate history — the time-travel chart "
