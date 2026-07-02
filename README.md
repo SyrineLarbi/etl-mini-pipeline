@@ -1,8 +1,10 @@
 # ETL Mini-Pipeline — Daily Weather
 
+**🔗 [Live dashboard →](https://etl-mini-pipeline-rlhvska5gyhtbm98kh9lni.streamlit.app/)**
+
 A small but production-shaped data pipeline that pulls daily weather aggregates for **5 cities**, lands them in a **medallion-style data lake** (raw → bronze → silver → gold), validates every row at the bronze boundary with **Pydantic**, and loads the gold layer into a **DuckDB** warehouse — then serves it as an interactive **Streamlit** dashboard. No servers, no secrets.
 
-![Weather ETL dashboard](docs/dashboard.png)
+[![Weather ETL dashboard](docs/dashboard.png)](https://etl-mini-pipeline-rlhvska5gyhtbm98kh9lni.streamlit.app/)
 
 ## Architecture
 
