@@ -6,7 +6,7 @@ and gives a clean `loaded_at` per run.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import duckdb
@@ -58,7 +58,8 @@ def load_gold(parquet_path: Path) -> dict:
     con = duckdb.connect(str(DB_PATH))
     try:
         con.execute(CREATE_SQL)
-        loaded_at = datetime.utcnow()
+        # naive UTC timestamp — matches the TIMESTAMP column, no tz surprises
+        loaded_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
         con.execute('DELETE FROM gold.weather_summary')
         con.execute(
