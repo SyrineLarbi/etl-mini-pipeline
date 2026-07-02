@@ -8,6 +8,8 @@ Usage:
 """
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import duckdb
@@ -84,6 +86,16 @@ def list_runs(limit: int = 20) -> None:
     for row in rows:
         table.add_row(*[str(c) for c in row])
     console.print(table)
+
+
+@app.command()
+def dashboard(port: int = 8501) -> None:
+    """Launch the Streamlit dashboard over the warehouse."""
+    script = ROOT / 'src' / 'dashboard.py'
+    console.print(f'[cyan]Starting dashboard[/cyan] → http://localhost:{port}  (Ctrl+C to stop)')
+    subprocess.run(
+        [sys.executable, '-m', 'streamlit', 'run', str(script), '--server.port', str(port)]
+    )
 
 
 @app.command()
